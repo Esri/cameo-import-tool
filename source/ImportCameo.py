@@ -75,38 +75,9 @@ def create_output_gdb(parent_folder, gdb_name):
     arcpy.AddMessage("Creating GDB: " + gdb_path)
     arcpy.CreateFileGDB_management(os.path.dirname(gdb_path), os.path.basename(gdb_path))
     arcpy.env.workspace = str(gdb_path)
-    #arcpy.AddMessage("  Output geodatabase created.")
     arcpy.AddMessage("-"*50)
     return str(gdb_path)
    
-def tables_to_gdb(folder_path, out_gdb_path):    
-    """Rename .mer to .csv and load the data"""
-    try:
-        #find all *.mer files
-        new_file_ext = ".csv"
-        old_file_ext = ".mer"
-        files = glob.glob(folder_path + os.sep + "*" + old_file_ext)
-
-        for file in files:
-            current_file_name = os.path.basename(file)
-            current_file = "{0}\\{1}".format(folder_path, current_file_name)
-
-            new_file_name = current_file_name.replace(old_file_ext, new_file_ext)
-            new_file = "{0}\\{1}".format(folder_path, new_file_name)
-        
-            #rename *.mer to *.csv
-            shutil.move(current_file, new_file)
-
-            is_spatial = False
-            if new_file_name.replace(new_file_ext, '') == NAME_OF_SPATIAL_TABLE: 
-                is_spatial = True
-            t = create_and_populate_table(new_file, out_gdb_path, is_spatial)
-            #cleanup old file
-            os.remove(new_file)
-    except Exception:
-        arcpy.AddError("Error occurred while loading the data")
-        raise
-
 def create_relationship_class(parent_table, primary_key, child_table, foreign_key):
     """creates the relationship class"""
     try:
@@ -177,28 +148,27 @@ def add_attachments(extracted_file_location, out_gdb_path):
         for dir in [d for d in os.listdir(extracted_file_location) 
                     if os.path.isdir(os.path.join(extracted_file_location, d)) 
                     and not d == os.path.basename(out_gdb_path)]:
-                add_attachment(extracted_file_location + os.sep + dir, NAME_OF_SPATIAL_TABLE, 
-                              ATTACHMENT_ID_FIELD)
+                add_attachment(extracted_file_location + os.sep + dir)
         arcpy.AddMessage(" attachments added")
     except Exception:
         arcpy.AddError("Error occurred while adding attachments")  
         raise    
 
-def add_attachment(search_folder, table, parent_join_field):
+def add_attachment(search_folder):
     """Enable and add the attachments """
-    #fields added to support the attachment table I generate
+    #fields added to support the attachment table generated
     id_field_name = "fieldID"
     value_field_name = "fieldValue"
 
     #first enable attachments
-    arcpy.EnableAttachments_management(arcpy.env.workspace + os.sep + table)
+    arcpy.EnableAttachments_management(arcpy.env.workspace + os.sep + NAME_OF_SPATIAL_TABLE)
 
     #create attachemnt table (<FieldValueToJoinOn>, <pathToResource>)
     attachment_table = create_attachment_table(search_folder, id_field_name, value_field_name)
 
     #TODO could look at using the working directory arg here to support longer paths to the attachments
-    arcpy.AddAttachments_management(arcpy.env.workspace + os.sep + table, 
-                                    parent_join_field, 
+    arcpy.AddAttachments_management(arcpy.env.workspace + os.sep + NAME_OF_SPATIAL_TABLE, 
+                                    ATTACHMENT_ID_FIELD, 
                                     attachment_table, 
                                     id_field_name, 
                                     value_field_name)
@@ -285,6 +255,34 @@ def get_fields(reader):
     del row
     return fields
 
+def tables_to_gdb(folder_path, out_gdb_path):    
+    """Rename .mer to .csv and load the data"""
+    try:
+        #find all *.mer files
+        new_file_ext = ".csv"
+        old_file_ext = ".mer"
+        files = glob.glob(folder_path + os.sep + "*" + old_file_ext)
+
+        for file in files:
+            current_file_name = os.path.basename(file)
+            current_file = "{0}\\{1}".format(folder_path, current_file_name)
+
+            new_file_name = current_file_name.replace(old_file_ext, new_file_ext)
+            new_file = "{0}\\{1}".format(folder_path, new_file_name)
+        
+            #rename *.mer to *.csv
+            shutil.move(current_file, new_file)
+
+            is_spatial = False
+            if new_file_name.replace(new_file_ext, '') == NAME_OF_SPATIAL_TABLE: 
+                is_spatial = True
+            t = create_and_populate_table(new_file, out_gdb_path, is_spatial)
+            #cleanup old file
+            os.remove(new_file)
+    except Exception:
+        arcpy.AddError("Error occurred while loading the data")
+        raise
+
 def create_and_populate_table(table, out_gdb, is_spatial):
     """Create the output table and populate its values"""
     with open(table, 'rb') as csv_file:
@@ -316,14 +314,14 @@ def create_and_populate_table(table, out_gdb, is_spatial):
                                     field_type = f[2],
                                     field_length= int(f[1]))
         index += 1
-    #arcpy.AddMessage("    fields added")
     if is_spatial:
         add_data(table, new_table, X_FIELD_NAME, Y_FIELD_NAME, fields)
     else:
         add_data(table, new_table, None, None, fields)
 
 def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
-    """Reads data from csv and writes to the new gdb table with shape""" 
+    """Reads data from csv and writes to the new gdb table""" 
+    """Handles tables or tables with shape if lat and lon fields are provided"""
     field_name_list = list(zip(*fields.values())[0])
     is_spatial = False
     if field_lat != None and field_lon != None:
@@ -378,7 +376,6 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
                         cursor.insertRow(new_row)
                     else:
                         cursor.insertRow(row)
-        #arcpy.AddMessage("    data imported")
         arcpy.AddMessage("-"*50)
 
 def main():
