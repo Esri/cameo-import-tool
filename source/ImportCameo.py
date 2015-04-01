@@ -3,8 +3,8 @@ import sys, os, arcpy, zipfile, glob, shutil, csv, datetime, re
 from datetime import date
 
 NAME_OF_SPATIAL_TABLE = "Facilities"
-X_FIELD_NAME = "Latitude"
-Y_FIELD_NAME = "Longitude"
+LAT_FIELD_NAME = "Latitude"
+LON_FIELD_NAME = "Longitude"
 ATTACHMENT_ID_FIELD = "FacilityRecordID"
 SPATIAL_REFERENCE = arcpy.SpatialReference(4326)
 
@@ -22,8 +22,7 @@ RELATIONSHIPS = {
             { "ChemInvLocations" : "FacilityRouteRecordID" },
             { "ScreeningAndScenarios" : "FacilityRouteRecordID" },
             { "MapData" : "ParentRecordID" },
-            { "SitePlanLink" : "FacilityRecordID" },
-            { "SitePlanLink123" : "FacilityRecordID123" }
+            { "SitePlanLink" : "FacilityRecordID" }
         ],
         "ChemInvLocations": [
             { "ChemInvLocations" : "ChemInInvRecordID" }, 
@@ -316,7 +315,7 @@ def create_and_populate_table(table, out_gdb, is_spatial):
                                     field_length= int(f[1]))
         index += 1
     if is_spatial:
-        add_data(table, new_table, X_FIELD_NAME, Y_FIELD_NAME, fields)
+        add_data(table, new_table, LAT_FIELD_NAME, LON_FIELD_NAME, fields)
     else:
         add_data(table, new_table, None, None, fields)
 
