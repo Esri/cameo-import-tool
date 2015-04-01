@@ -1,4 +1,4 @@
-#The goal of this tool is to create File GDB and FCs from Cameo export *.zip
+#The goal of this tool is to create File GDB and FCs from CAMEO export *.zip
 import sys, os, arcpy, zipfile, glob, shutil, csv, datetime, re
 from datetime import date
 
@@ -22,7 +22,8 @@ RELATIONSHIPS = {
             { "ChemInvLocations" : "FacilityRouteRecordID" },
             { "ScreeningAndScenarios" : "FacilityRouteRecordID" },
             { "MapData" : "ParentRecordID" },
-            { "SitePlanLink" : "FacilityRecordID" }
+            { "SitePlanLink" : "FacilityRecordID" },
+            { "SitePlanLink123" : "FacilityRecordID123" }
         ],
         "ChemInvLocations": [
             { "ChemInvLocations" : "ChemInInvRecordID" }, 
@@ -69,7 +70,7 @@ def create_output_gdb(parent_folder, gdb_name):
     gdb_path = parent_folder + os.sep + gdb_name + ".gdb"
     #generate a unique name if the gdb already exists
     if arcpy.Exists(gdb_path):
-        arcpy.AddMessage("    " + gdb_path + " already exists...creating a unique name for the workspace")
+        arcpy.AddWarning("    " + gdb_path + " already exists...creating a unique name for the workspace")
         unique_name = arcpy.CreateUniqueName(gdb_name + ".gdb", parent_folder)
         gdb_path = unique_name
     arcpy.AddMessage("Creating GDB: " + gdb_path)
@@ -110,12 +111,12 @@ def create_relationship_class(parent_table, primary_key, child_table, foreign_ke
             arcpy.AddMessage("  created: " + out_relationship_class_name)
         else:
             if not parent_exists:
-                arcpy.AddMessage("Relationship table does not exist: " + full_parent_table_path)
+                arcpy.AddWarning("Relationship table does not exist: " + full_parent_table_path)
             if not child_exists:
-                arcpy.AddMessage("Relationship table does not exist: " + full_child_table_path)
-            arcpy.AddMessage("Please review the RELATIONSHIPS variable in the source Python file to ensure it is valid")
+                arcpy.AddWarning("Relationship table does not exist: " + full_child_table_path)
+            arcpy.AddWarning("Please review the RELATIONSHIPS variable in the source Python file to ensure it is valid")
     except arcpy.ExecuteError:
-        arcpy.AddMessage("Error creating relationship between {0} and {1}".format(parent_table, child_table))
+        arcpy.AddError("Error creating relationship between {0} and {1}".format(parent_table, child_table))
         raise
 
 def create_relationship_classes(relationships):
