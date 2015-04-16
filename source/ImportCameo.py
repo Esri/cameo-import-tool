@@ -359,11 +359,15 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
                         #if this changes the string then update the row
                         if new_value != value:
                             row[xx] = new_value
+                            if new_row:
+                                new_row[xx] = new_value
                         if fields[xx][2] == "Date":
                             #check for valid date value
                             if not check_date(new_value)[0]:
                                 #set default if valid date not found
                                 row[xx] = None
+                                if new_row:
+                                    new_row[xx] = None
                         if is_spatial and not has_xy:
                             #row is from our reader...create a new row to append the new shape
                             if row[lat_index] in ["", None] or row[lon_index] in ["", None] or not check_float(row[lon_index]) or not check_float(row[lat_index]):
@@ -374,6 +378,7 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
                         xx+=1
                     if new_row:
                         cursor.insertRow(new_row)
+                        new_row = None
                     else:
                         cursor.insertRow(row)
         arcpy.AddMessage("-"*50)
