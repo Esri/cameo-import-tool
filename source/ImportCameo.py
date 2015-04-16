@@ -329,7 +329,6 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
         field_name_list.append("SHAPE@")
     lat_index = -1
     lon_index = -1
-    new_row = None
     arcpy.AddMessage("  Importing data...")
     with open(table, 'rb') as csv_file:
         reader = csv.reader(csv_file, delimiter=',', quotechar='"')  
@@ -337,6 +336,7 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
             first_row = True
             for row in reader: 
                 has_xy = False
+                new_row = None
                 #first row has column headers
                 if first_row:
                     first_row = False
@@ -358,16 +358,18 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
                         new_value = ''.join([i if ord(i) < 128 else '' for i in str(value)])
                         #if this changes the string then update the row
                         if new_value != value:
-                            row[xx] = new_value
-                            if new_row:
+                            if new_row != None:
                                 new_row[xx] = new_value
+                            else:
+                                row[xx] = new_value
                         if fields[xx][2] == "Date":
                             #check for valid date value
                             if not check_date(new_value)[0]:
                                 #set default if valid date not found
-                                row[xx] = None
-                                if new_row:
+                                if new_row != None:
                                     new_row[xx] = None
+                                else:
+                                    row[xx] = None
                         if is_spatial and not has_xy:
                             #row is from our reader...create a new row to append the new shape
                             if row[lat_index] in ["", None] or row[lon_index] in ["", None] or not check_float(row[lon_index]) or not check_float(row[lat_index]):
@@ -378,7 +380,6 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
                         xx+=1
                     if new_row:
                         cursor.insertRow(new_row)
-                        new_row = None
                     else:
                         cursor.insertRow(row)
         arcpy.AddMessage("-"*50)
