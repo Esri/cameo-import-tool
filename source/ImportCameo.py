@@ -94,6 +94,9 @@ def create_relationship_class(parent_table, primary_key, child_table, foreign_ke
         #name for rel class
         out_relationship_class_name = "{0}_{1}".format(parent_table_name, child_table_name)
 
+        #populated if the given table does not exist
+        return_issues = []
+
         #verify that both tables exist prior to creating the relationship class
         if parent_exists and child_exists:
             arcpy.CreateRelationshipClass_management(full_parent_table_path, 
@@ -109,11 +112,12 @@ def create_relationship_class(parent_table, primary_key, child_table, foreign_ke
                                                      foreign_key)
             arcpy.AddMessage("  created: " + out_relationship_class_name)
         else:
+            
             if not parent_exists:
-                arcpy.AddWarning("Relationship table does not exist: " + full_parent_table_path)
+                return_issues.append(full_parent_table_path)
             if not child_exists:
-                arcpy.AddWarning("Relationship table does not exist: " + full_child_table_path)
-            arcpy.AddWarning("Please review the RELATIONSHIPS variable in the source Python file to ensure it is valid")
+                return_issues.append(full_child_table_path)
+        return return_issues
     except arcpy.ExecuteError:
         arcpy.AddError("Error creating relationship between {0} and {1}".format(parent_table, child_table))
         raise
@@ -121,24 +125,33 @@ def create_relationship_class(parent_table, primary_key, child_table, foreign_ke
 def create_relationship_classes(relationships):
     """Loop through the RELATIONSHIPS dictionary and create the relationship classes"""
     arcpy.AddMessage("Creating relationship classes...")
-    for main_table in relationships.keys():
+    rel_issues = []
+    for main_table in list(relationships.keys()):
         parent_table = ""
         parent_table_field_name = ""
         for table_map in relationships[main_table]:
             #this expects the data structure to contain: 
             #{ <ParentTableName> : [{ <ParentTableName> : <ParentKeyFieldName> }, {<ChildTableName> : <ChildFieldName>}, {<ChildTableName(n)> : <ChildFieldName(n)>}]
             # so just keep re-using the parent table/field name against all child table/field name(s)
-            if table_map.keys()[0] != main_table:
-                child_table_name = table_map.keys()[0]
+            if list(table_map.keys())[0] != main_table:
+                child_table_name = list(table_map.keys())[0]
                 child_table_field_name = table_map[child_table_name]
-                create_relationship_class(parent_table, 
+                rel_issue = create_relationship_class(parent_table, 
                                         parent_table_field_name, 
                                         child_table_name, 
                                         child_table_field_name)
+                if len(rel_issue) > 0:
+                    for issue in rel_issue:
+                        rel_issues.append(issue)
             else:
-                parent_table = table_map.keys()[0]
+                parent_table = list(table_map.keys())[0]
                 parent_table_field_name = table_map[parent_table]
     arcpy.AddMessage("Relationship classes created")
+    if len(rel_issues) > 0:
+        arcpy.AddWarning("Please review the RELATIONSHIPS variable in the source Python file to ensure it is valid")
+        arcpy.AddWarning("Relationship classes for the following tables were not created as the table(s) did not exist:")
+        for issue in rel_issues:
+            arcpy.AddWarning(issue)
     arcpy.AddMessage("-"*50)
 
 def add_attachments(extracted_file_location, out_gdb_path):
@@ -285,7 +298,7 @@ def tables_to_gdb(folder_path, out_gdb_path):
 
 def create_and_populate_table(table, out_gdb, is_spatial):
     """Create the output table and populate its values"""
-    with open(table, 'rb') as csv_file:
+    with open(table, 'rt') as csv_file:
         reader = csv.reader(csv_file, delimiter=',', quotechar='"')       
         fields = get_fields(reader)
         del(reader)
@@ -322,7 +335,7 @@ def create_and_populate_table(table, out_gdb, is_spatial):
 def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
     """Reads data from csv and writes to the new gdb table""" 
     """Handles tables or tables with shape if lat and lon fields are provided"""
-    field_name_list = list(zip(*fields.values())[0])
+    field_name_list = list(list(zip(*list(fields.values())))[0])
     is_spatial = False
     if field_lat != None and field_lon != None:
         is_spatial = True
@@ -330,7 +343,7 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
     lat_index = -1
     lon_index = -1
     arcpy.AddMessage("  Importing data...")
-    with open(table, 'rb') as csv_file:
+    with open(table, 'rt') as csv_file:
         reader = csv.reader(csv_file, delimiter=',', quotechar='"')  
         with arcpy.da.InsertCursor(new_table, field_name_list) as cursor:  
             first_row = True
@@ -387,6 +400,13 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
 def main():
     arcpy.env.overwriteOutput = True
 
+    #Check for basic license
+    # Basic doesn't support the GP tools for adding relationships or attachments
+    product_info = str(arcpy.ProductInfo())
+    if product_info == 'ArcView':
+        arcpy.AddWarning("Basic license level does not support the adding of relationship classes or attachments.")
+        arcpy.AddWarning("Tables will be generated without relationship classes or attachments")
+
     ##Path to *.zip
     ##Example Usage: r"C:\DATA_all_July2014.zip"
     zip_path = arcpy.GetParameterAsText(0)
@@ -408,11 +428,12 @@ def main():
     #import the data into gdb tables
     tables_to_gdb(extracted_file_location, out_gdb_path)
 
-    #create appropriate relationship classes
-    create_relationship_classes(RELATIONSHIPS)
+    if product_info != 'ArcView':
+        #create appropriate relationship classes
+        create_relationship_classes(RELATIONSHIPS)
 
-    #add the attachments
-    add_attachments(extracted_file_location, out_gdb_path)
+        #add the attachments
+        add_attachments(extracted_file_location, out_gdb_path)
 
 if __name__ == "__main__":
     main()
