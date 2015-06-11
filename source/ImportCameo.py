@@ -147,11 +147,11 @@ def create_relationship_classes(relationships):
                 parent_table = list(table_map.keys())[0]
                 parent_table_field_name = table_map[parent_table]
     arcpy.AddMessage("Relationship classes created")
-    if len(rel_issues) > 0:
-        arcpy.AddWarning("Please review the RELATIONSHIPS variable in the source Python file to ensure it is valid")
-        arcpy.AddWarning("Relationship classes for the following tables were not created as the table(s) did not exist:")
-        for issue in rel_issues:
-            arcpy.AddWarning(issue)
+    #if len(rel_issues) > 0:
+        #arcpy.AddWarning("Please review the RELATIONSHIPS variable in the source Python file to ensure it is valid")
+        #arcpy.AddWarning("Relationship classes for the following tables were not created as the table(s) did not exist:")
+        #for issue in rel_issues:
+            #arcpy.AddWarning(issue)
     arcpy.AddMessage("-"*50)
 
 def add_attachments(extracted_file_location, out_gdb_path):
@@ -162,6 +162,7 @@ def add_attachments(extracted_file_location, out_gdb_path):
                     if os.path.isdir(os.path.join(extracted_file_location, d)) 
                     and not d == os.path.basename(out_gdb_path)]:
                 add_attachment(extracted_file_location + os.sep + dir)
+        shutil.rmtree(extracted_file_location + os.sep + dir)
         arcpy.AddMessage(" attachments added")
     except Exception:
         arcpy.AddError("Error occurred while adding attachments")  
