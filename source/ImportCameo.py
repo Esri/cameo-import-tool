@@ -6,6 +6,7 @@ NAME_OF_SPATIAL_TABLE = "Facilities"
 LAT_FIELD_NAME = "Latitude"
 LON_FIELD_NAME = "Longitude"
 ATTACHMENT_ID_FIELD = "FacilityRecordID"
+ATTACHMENT_DIR_NAME = "SitePlansTemp"
 SPATIAL_REFERENCE = arcpy.SpatialReference(4326)
 
 # THIS NEEDS TO BE UPDATED IF ADDITIONAL RELATIONSHIPS EXIST
@@ -158,11 +159,25 @@ def add_attachments(extracted_file_location, out_gdb_path):
     """Loop through attachment folders and add the attachments"""
     try:
         arcpy.AddMessage("Adding attachments...")
-        for dir in [d for d in os.listdir(extracted_file_location) 
-                    if os.path.isdir(os.path.join(extracted_file_location, d)) 
-                    and not d == os.path.basename(out_gdb_path)]:
-                add_attachment(extracted_file_location + os.sep + dir)
-        shutil.rmtree(extracted_file_location + os.sep + dir)
+        attachment_full_path = extracted_file_location + os.sep + ATTACHMENT_DIR_NAME
+        if os.path.exists(attachment_full_path):
+            add_attachment(attachment_full_path)
+            shutil.rmtree(attachment_full_path)
+        else:
+            arcpy.AddWarning("Expected attachment path does not exist: " + attachment_full_path)
+            # this is just in case the attachments folder is not the name as defined in the script
+            # for ATTACHMENT_DIR_NAME
+            for dir in [d for d in os.listdir(extracted_file_location) 
+                        if os.path.isdir(os.path.join(extracted_file_location, d)) 
+                        and not d == os.path.basename(out_gdb_path) and d.find(".gdb") == -1]:
+                try:
+                    attachment_full_path = extracted_file_location + os.sep + dir
+                    arcpy.AddMessage("Attempting to add attachments from: " + attachment_full_path)
+                    add_attachment(attachment_full_path)
+                    shutil.rmtree(attachment_full_path)
+                except:
+                    pass
+        
         arcpy.AddMessage(" attachments added")
     except Exception:
         arcpy.AddError("Error occurred while adding attachments")  
