@@ -165,23 +165,19 @@ def add_attachments(extracted_file_location, out_gdb_path):
             shutil.rmtree(attachment_full_path)
         else:
             arcpy.AddWarning("Expected attachment path does not exist: " + attachment_full_path)
-            # this is just in case the attachments folder is not the name as defined in the script
-            # for ATTACHMENT_DIR_NAME
-            for dir in [d for d in os.listdir(extracted_file_location) 
-                        if os.path.isdir(os.path.join(extracted_file_location, d)) 
-                        and not d == os.path.basename(out_gdb_path) and d.find(".gdb") == -1]:
-                try:
-                    attachment_full_path = extracted_file_location + os.sep + dir
-                    arcpy.AddMessage("Attempting to add attachments from: " + attachment_full_path)
-                    add_attachment(attachment_full_path)
-                    shutil.rmtree(attachment_full_path)
-                except:
-                    pass
-        
+
         arcpy.AddMessage(" attachments added")
     except Exception:
         arcpy.AddError("Error occurred while adding attachments")  
         raise    
+
+def remove_attachment_folder(extracted_file_location, out_gdb_path):
+
+    attachment_full_path = extracted_file_location + os.sep + ATTACHMENT_DIR_NAME
+
+    if os.path.exists(attachment_full_path):
+        shutil.rmtree(attachment_full_path)
+        arcpy.AddMessage("Removed attachment folder: " + attachment_full_path)
 
 def add_attachment(search_folder):
     """Enable and add the attachments """
@@ -450,6 +446,8 @@ def main():
 
         #add the attachments
         add_attachments(extracted_file_location, out_gdb_path)
+
+    remove_attachment_folder(extracted_file_location, out_gdb_path)
 
 if __name__ == "__main__":
     main()
