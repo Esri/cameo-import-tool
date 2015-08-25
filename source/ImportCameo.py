@@ -243,21 +243,34 @@ def check_float(value):
     except ValueError:
         return False
 
+def reverse_numeric(x, y):
+    return y - x
+
+def remove_null(collection, null_fields):
+    if len(null_fields) > 0:
+        #sort the values so we can remove the highest index first and not affect the lower index values
+        null_fields_sort = sorted(null_fields, cmp=reverse_numeric)
+        for nf in null_fields_sort:
+            del collection[nf]
+
 def get_fields(reader):
     """Reads field values to determine appropriate field length"""
     fields = {}
     first_row = True
     #first read the records and build the list
-    for row in reader:   
+    for row in reader:  
         index = 0   
         #{fieldIndex:(fieldName, size, type, testComplete)}
         if first_row:
             first_row = False
-            for field_name in row:
+            for field_name in row:               
                 fields[index] = [field_name, 255, "Text", False] #default to "Text"
                 index += 1
         else:
+            error_row = True if len(row) != len(fields) else False
             for value in row:
+                if error_row and index == len(fields):
+                    break
                 current_length = len(value)
                 if fields[index][1] < current_length: 
                     if current_length in range(0, 249): 
@@ -277,6 +290,7 @@ def get_fields(reader):
                         fields[index][2] = "Date"
                     fields[index][3] = test_complete
                 index += 1
+
     del row
     return fields
 
@@ -303,7 +317,7 @@ def tables_to_gdb(folder_path, out_gdb_path):
                 is_spatial = True
             t = create_and_populate_table(new_file, out_gdb_path, is_spatial)
             #cleanup old file
-            os.remove(new_file)
+            #os.remove(new_file)
     except Exception:
         arcpy.AddError("Error occurred while loading the data")
         raise
@@ -329,22 +343,32 @@ def create_and_populate_table(table, out_gdb, is_spatial):
     arcpy.AddMessage("  Table Added: " + str(new_table))
     arcpy.AddMessage("  Adding new fields...")
     index = 0
+    null_fields = []
     for field in fields:
         f = fields[index]
         field_name = str(f[0])
         field_name = arcpy.ValidateFieldName(field_name, out_gdb)
         f[0] = field_name
-        arcpy.AddField_management(new_table,
-                                    field_name,
-                                    field_type = f[2],
-                                    field_length= int(f[1]))
+        if field_name not in ["", " ", None]:
+            arcpy.AddField_management(new_table,
+                                        field_name,
+                                        field_type = f[2],
+                                        field_length= int(f[1]))
+        else:
+            arcpy.AddWarning("{0}: contains a field with a missing name at index {1}".format(table_name, str(index)))
+            arcpy.AddWarning("No new field was added for index " + str(index))
+            null_fields.append(index)
         index += 1
-    if is_spatial:
-        add_data(table, new_table, LAT_FIELD_NAME, LON_FIELD_NAME, fields)
-    else:
-        add_data(table, new_table, None, None, fields)
 
-def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
+    #remove any fields with NULL name from fields collection
+    remove_null(fields, null_fields)
+
+    if is_spatial:
+        add_data(table, new_table, LAT_FIELD_NAME, LON_FIELD_NAME, fields, null_fields)
+    else:
+        add_data(table, new_table, None, None, fields, null_fields)
+
+def add_data(table, new_table, field_lat=None, field_lon=None, fields=None, null_fields=None):
     """Reads data from csv and writes to the new gdb table""" 
     """Handles tables or tables with shape if lat and lon fields are provided"""
     field_name_list = list(list(zip(*list(fields.values())))[0])
@@ -355,11 +379,15 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
     lat_index = -1
     lon_index = -1
     arcpy.AddMessage("  Importing data...")
+    row_index = 0
     with open(table, 'rt') as csv_file:
         reader = csv.reader(csv_file, delimiter=',', quotechar='"')  
         with arcpy.da.InsertCursor(new_table, field_name_list) as cursor:  
             first_row = True
-            for row in reader: 
+            for row in reader:
+                row_index += 1 
+                if len(null_fields) > 0:
+                    remove_null(row, null_fields)
                 has_xy = False
                 new_row = None
                 #first row has column headers
@@ -378,7 +406,14 @@ def add_data(table, new_table, field_lat=None, field_lon=None, fields=None):
                                 index += 1
                 else:
                     xx = 0
+                    error_row = True if len(row) != len(fields) else False
                     for value in row:
+                        if error_row and xx == len(fields):
+                            arcpy.AddWarning("Row: {0} in {1} contains more values than fields".format(str(row_index), csv_file)) 
+                            arcpy.AddWarning(row)
+                            while xx < len(row):
+                                del row[-1]
+                            break
                         #remove non ascii if any
                         new_value = ''.join([i if ord(i) < 128 else '' for i in str(value)])
                         #if this changes the string then update the row
