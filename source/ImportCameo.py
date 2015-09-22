@@ -1,4 +1,4 @@
-#The goal of this tool is to create File GDB and FCs from CAMEO export *.zip
+﻿#The goal of this tool is to create File GDB and FCs from CAMEO export *.zip
 import sys, os, arcpy, zipfile, glob, shutil, csv, datetime, re
 from datetime import date
 
@@ -317,7 +317,7 @@ def tables_to_gdb(folder_path, out_gdb_path):
                 is_spatial = True
             t = create_and_populate_table(new_file, out_gdb_path, is_spatial)
             #cleanup old file
-            #os.remove(new_file)
+            os.remove(new_file)
     except Exception:
         arcpy.AddError("Error occurred while loading the data")
         raise
