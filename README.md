@@ -58,5 +58,5 @@ limitations under the License.
 A copy of the license is available in the repository's
 [LICENSE.txt](LICENSE.txt) file.
 
-[](Esri Tags: Python State-Government Government)
+[](Esri Tags: Python State-Government Government State Emergency-Management Solutions)
 [](Esri Language: Python)
