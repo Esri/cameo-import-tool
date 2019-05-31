@@ -351,16 +351,17 @@ def create_and_populate_table(table, out_gdb, is_spatial):
     arcpy.AddMessage("Adding Table: " + str(table_name))
 
     if is_spatial:
-        new_table = arcpy.CreateFeatureclass_management(out_gdb, 
+        new_table = arcpy.CreateFeatureclass_management("in_memory", 
                                                 table_name, 
                                                 "Point", 
                                                 spatial_reference = SPATIAL_REFERENCE)
     else:
-        new_table = arcpy.CreateTable_management(out_gdb, table_name)      
-    arcpy.AddMessage("  Table Added: " + str(new_table))
+        new_table = arcpy.CreateTable_management("in_memory", table_name)      
+    arcpy.AddMessage("  Table Added: " + out_gdb + os.sep + table_name)
     arcpy.AddMessage("  Adding new fields...")
     index = 0
     null_fields = []
+    #fieldsDescriptions = []
     for field in fields:
         f = fields[index]
         field_name = str(f[0])
@@ -371,6 +372,7 @@ def create_and_populate_table(table, out_gdb, is_spatial):
                                         field_name,
                                         field_type = f[2],
                                         field_length= int(f[1]))
+            #fieldsDescriptions.append([field_name, f[2], f[0], int(f[1])])
         else:
             arcpy.AddWarning("{0}: contains a field with a missing name at index {1}".format(table_name, str(index)))
             arcpy.AddWarning("No new field was added for index " + str(index))
@@ -384,6 +386,13 @@ def create_and_populate_table(table, out_gdb, is_spatial):
         add_data(table, new_table, LAT_FIELD_NAME, LON_FIELD_NAME, fields, null_fields)
     else:
         add_data(table, new_table, None, None, fields, null_fields)
+    
+    if is_spatial:
+        arcpy.CopyFeatures_management(new_table, out_gdb + os.sep + table_name)
+    else:
+        arcpy.CopyRows_management(new_table, out_gdb + os.sep + table_name)
+    
+    arcpy.Delete_management("in_memory")
 
 def add_data(table, new_table, field_lat=None, field_lon=None, fields=None, null_fields=None):
     """Reads data from csv and writes to the new gdb table""" 
@@ -489,6 +498,9 @@ def main():
     #create the output workspace
     out_gdb_path = create_output_gdb(out_workspace_path, gdb_name)
 
+    ##Name of output feature class
+    facilities = out_gdb_path + os.sep + NAME_OF_SPATIAL_TABLE
+
     #import the data into gdb tables
     tables_to_gdb(extracted_file_location, out_gdb_path)
 
@@ -500,6 +512,19 @@ def main():
         add_attachments(extracted_file_location, out_gdb_path)
 
     remove_attachment_folder(extracted_file_location, out_gdb_path)
+
+    #Set Derived Parameter Values
+    # derived values are added to the map
+
+    arcpy.SetParameterAsText(3, facilities)
+
+    arcpy.env.workspace = out_gdb_path
+
+    out_tables = arcpy.ListTables()
+
+    out_tables = ";".join([out_gdb_path + os.sep + table for table in out_tables if "__ATTACH" not in table])
+
+    arcpy.SetParameterAsText(4, out_tables)
 
 if __name__ == "__main__":
     main()
