@@ -386,11 +386,19 @@ def create_and_populate_table(table, out_gdb, is_spatial):
         add_data(table, new_table, LAT_FIELD_NAME, LON_FIELD_NAME, fields, null_fields)
     else:
         add_data(table, new_table, None, None, fields, null_fields)
+
+    #Check to see if table already already exists in output geodatabase
+    #if table exists then append features from input ZIP file
+    #This is to support processing multiple input ZIP files
     
-    if is_spatial:
-        arcpy.CopyFeatures_management(new_table, out_gdb + os.sep + table_name)
+    outTable = out_gdb + os.sep + table_name
+    if arcpy.Exists(outTable):
+        arcpy.Append_management(new_table,outTable,schema_type="NO_TEST")
     else:
-        arcpy.CopyRows_management(new_table, out_gdb + os.sep + table_name)
+        if is_spatial:
+            arcpy.CopyFeatures_management(new_table, outTable)
+        else:
+            arcpy.CopyRows_management(new_table, outTable)
     
     arcpy.Delete_management("in_memory")
 
@@ -482,7 +490,7 @@ def main():
 
     ##Path to *.zip
     ##Example Usage: r"C:\DATA_all_July2014.zip"
-    zip_path = arcpy.GetParameterAsText(0)
+    zip_paths = arcpy.GetParameterAsText(0).split(";")
 
     ###Path to output workspace...could derive this from the zip
     ##Example Usage: r"C:\temp"
@@ -492,8 +500,7 @@ def main():
     ##Example Usage: "testDataOutput"
     gdb_name = arcpy.GetParameterAsText(2)
 
-    #extract the zip file
-    extracted_file_location = extract_zip(zip_path) 
+    #extracted_file_location = extract_zip(zip_path) 
   
     #create the output workspace
     out_gdb_path = create_output_gdb(out_workspace_path, gdb_name)
@@ -502,7 +509,11 @@ def main():
     facilities = out_gdb_path + os.sep + NAME_OF_SPATIAL_TABLE
 
     #import the data into gdb tables
-    tables_to_gdb(extracted_file_location, out_gdb_path)
+    for zip_path in zip_paths:
+        #extract the zip file
+        extracted_file_location = extract_zip(zip_path)
+        #convert to .mer files to GDB tables
+        tables_to_gdb(extracted_file_location, out_gdb_path)
 
     if product_info != 'ArcView':
         #create appropriate relationship classes
