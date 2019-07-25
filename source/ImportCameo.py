@@ -556,7 +556,7 @@ def main():
 
     ##Path to *.zip
     ##Example Usage: r"C:\DATA_all_July2014.zip"
-    zip_paths = arcpy.GetParameterAsText(0).split(";")
+    zip_paths = [valueObject.value for valueObject in arcpy.GetParameter(0)]
 
     ###Path to output workspace...could derive this from the zip
     ##Example Usage: r"C:\temp"
