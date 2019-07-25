@@ -1560,8 +1560,8 @@ combinedCAMEO_suite = {
     }
 }
 
-errorCount = 0
 def functional_tests(testSuite):
+    errorCount = 0
     print("TESTS for {} Test Suite**********************************************".format(testSuite['GDBName']))
     #GEODATABASE TESTS***********************************************************
     print('Geodatabase Tests****************************************************')
@@ -1630,19 +1630,21 @@ def functional_tests(testSuite):
     for test in [test1, test2, test3, test4, test7, test10]:
         if test == False:
             errorCount += 1
-
+    
+    return errorCount
 
 arcpy.ImportToolbox(toolBoxPath)
 
 suiteList = [mockCAMEO_suite,sampleCAMEO_suite,combinedCAMEO_suite]
-
+totalErrors = 0
 for suite in suiteList:
     if arcpy.Exists(suite['GDBPath']):
         arcpy.management.Delete(suite['GDBPath'])
 
     arcpy.cameo.ImportCameoData(suite['source'], testDir, suite['GDBName'])
-    functional_tests(suite)
+    errCount = functional_tests(suite)
+    totalErrors += errCount
     arcpy.management.Delete(suite['GDBPath'])
 
-if errorCount > 0:
+if totalErrors > 0:
     sys.exit(1)
