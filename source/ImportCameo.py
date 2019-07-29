@@ -459,6 +459,14 @@ def create_and_populate_table(table, out_gdb, is_spatial, lat_field=None, lon_fi
     
     outTable = out_gdb + os.sep + table_name
     if arcpy.Exists(outTable):
+        existingTableFields = sorted([field.name for field in arcpy.ListFields(outTable)])
+        newTableFields = sorted([field.name for field in arcpy.ListFields(new_table)])
+        #Check to see if any additional fields need to be added to the source table
+        if existingTableFields != newTableFields:
+            fieldListToAdd = [fieldname for fieldname in newTableFields if fieldname not in existingTableFields]
+            fieldsToAdd = [field for field in arcpy.ListFields(new_table) if field.name in fieldListToAdd and field.type != "OID"]
+            for field in fieldsToAdd:
+                arcpy.AddField_management(outTable,field.name,field.type, field_length=field.length)
         arcpy.Append_management(new_table,outTable,schema_type="NO_TEST")
     else:
         if is_spatial:
