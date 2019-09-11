@@ -338,7 +338,7 @@ def get_fields(reader):
         if first_row:
             first_row = False
             for field_name in row:               
-                fields[index] = [field_name, 255, "Text", False] #default to "Text"
+                fields[index] = [field_name, 1000, "Text", False] #default to "Text"
                 index += 1
         else:
             error_row = True if len(row) != len(fields) else False
@@ -348,11 +348,11 @@ def get_fields(reader):
                 current_length = len(value)
                 if fields[index][1] < current_length: 
                     if current_length in range(0, 249): 
-                        fields[index][1] = 1000
+                        fields[index][1] = 1500
                     elif current_length in range(250, 499):
-                        fields[index][1] = 2000
+                        fields[index][1] = 3000
                     elif current_length in range(500, 999):
-                        fields[index][1] = 4000
+                        fields[index][1] = 5000
                     else:
                         #if the value exceeds 1000 then round it UP to the nearest thousand
                         # and use that for the length
