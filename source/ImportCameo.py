@@ -348,11 +348,11 @@ def get_fields(reader):
                 current_length = len(value)
                 if fields[index][1] < current_length: 
                     if current_length in range(0, 249): 
-                        fields[index][1] = 750
+                        fields[index][1] = 1000
                     elif current_length in range(250, 499):
-                        fields[index][1] = 1500
+                        fields[index][1] = 2000
                     elif current_length in range(500, 999):
-                        fields[index][1] = 3000
+                        fields[index][1] = 4000
                     else:
                         #if the value exceeds 1000 then round it UP to the nearest thousand
                         # and use that for the length
