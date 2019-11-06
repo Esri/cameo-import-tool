@@ -19,10 +19,36 @@
 import sys, os, arcpy, zipfile, glob, shutil, csv, datetime, re
 from datetime import date
 
-NAME_OF_SPATIAL_TABLE = "Facilities"
-LAT_FIELD_NAME = "Latitude"
-LON_FIELD_NAME = "Longitude"
-ATTACHMENT_ID_FIELD = "FacilityRecordID"
+# Defines tables that will be converted to feature classes, x/y fields are specified for each
+NAMES_OF_SPATIAL_TABLES = {
+    "Facilities" : {
+        "LatField": "Latitude",
+        "LonField" : "Longitude"
+    },
+    "SpecialLocations" : {
+        "LatField": "SpLatitude",
+        "LonField" : "SpLongitude"
+    },
+    "Incidents" : {
+        "LatField": "InLatitude",
+        "LonField" : "InLongitude"
+    },
+    "Resources" : {
+        "LatField": "ReLatitude",
+        "LonField" : "ReLongitude"
+    }
+}
+
+# Defines CAMEO Tables that can potentially have documents or images attached and the ID field that would be used to link to the attachment
+TABLES_WITH_ATTACHMENTS = {
+    "Facilities" : "FacilityRecordID",
+    "SpecialLocations": "SpecialLocRecordID",
+    "Incidents": "IncidentRecordID",
+    "Resources": "ResourceRecordID",
+    "Routes" : "RouteRecordID",
+    "Contacts" : "ContactRecordID"
+}
+
 ATTACHMENT_DIR_NAME = "SitePlansTemp"
 SPATIAL_REFERENCE = arcpy.SpatialReference(4326)
 
@@ -39,22 +65,51 @@ RELATIONSHIPS = {
             { "Incidents" : "FacilityRouteRecordID" },
             { "ChemInvLocations" : "FacilityRouteRecordID" },
             { "ScreeningAndScenarios" : "FacilityRouteRecordID" },
-            { "MapData" : "ParentRecordID" },
+            { "ContactsLink" : "OtherRecordID"},
+            { "Phone" : "ParentRecordID" },
+            { "SitePlanLink" : "FacilityRecordID" },
+            { "MapData" : "ParentRecordID" }
+        ],
+        "Incidents" : [
+            { "Incidents" : "IncidentRecordID" }, 
+            { "IncidentMaterials" : "IncidentRecordID" },
+            { "ContactsLink" : "OtherRecordID"},
             { "SitePlanLink" : "FacilityRecordID" }
+        ],
+        "SpecialLocations" : [
+            { "SpecialLocations" : "SpecialLocRecordID" }, 
+            { "ContactsLink" : "OtherRecordID"},
+            { "Phone" : "ParentRecordID" },
+            { "SitePlanLink" : "FacilityRecordID" },
+            { "MapData" : "ParentRecordID" }
+        ],
+        "Resources" : [
+            { "Resources" : "ResourceRecordID"},
+            { "ResourceEquipt" : "RecordKey"},
+            { "ContactsLink" : "OtherRecordID"},
+            { "Phone" : "ParentRecordID" },
+            { "SitePlanLink" : "FacilityRecordID" },
+            { "MapData" : "ParentRecordID" }  
+        ],
+        "Routes": [
+            { "Routes" : "RouteRecordID" }, 
+            { "RouteIntersections" : "RouteRecordID" },
+            { "Incidents" : "FacilityRouteRecordID"},
+            { "ChemInvLocations" : "FacilityRouteRecordID" },
+            { "ScreeningAndScenarios" : "FacilityRouteRecordID" },
+            { "SitePlanLink" : "FacilityRecordID" },
+            { "MapData" : "ParentRecordID" },
         ],
         "ChemInvLocations": [
             { "ChemInvLocations" : "ChemInInvRecordID" }, 
             { "ChemicalsInInventory" : "ChemInvRecordID" }, 
-            { "ChemInvMixtures" : "ChemInvRecID" },
-            { "ChemInvLocations" : "FacilityRouteRecordID" }
-        ],
-        "Routes": [
-            { "Routes" : "RouteRecordID" }, 
-            { "RouteIntersections" : "RouteRecordID" }
+            { "ChemInvMixtures" : "ChemInvRecID" }
         ],
         "Contacts": [
             { "Contacts" : "ContactRecordID" }, 
-            { "Phone" : "ParentRecordID" }
+            { "Phone" : "ParentRecordID" },
+            { "ContactsLink" : "ContactRecordID"},
+            { "SitePlanLink" : "FacilityRecordID" }
         ]}
 
 def extract_zip(path_to_zip):
@@ -122,7 +177,7 @@ def create_relationship_class(parent_table, primary_key, child_table, foreign_ke
                                                      out_relationship_class_name,
                                                      "SIMPLE",
                                                      child_table_name,
-                                                     "Is Owned By",
+                                                     "Parent",
                                                      "FORWARD",
                                                      "ONE_TO_MANY",
                                                      "NONE",
@@ -175,15 +230,17 @@ def create_relationship_classes(relationships):
 def add_attachments(extracted_file_location, out_gdb_path):
     """Loop through attachment folders and add the attachments"""
     try:
-        arcpy.AddMessage("Adding attachments...")
         attachment_full_path = extracted_file_location + os.sep + ATTACHMENT_DIR_NAME
-        if os.path.exists(attachment_full_path):
-            add_attachment(attachment_full_path)
-            shutil.rmtree(attachment_full_path)
-        else:
-            arcpy.AddWarning("Expected attachment path does not exist: " + attachment_full_path)
-
-        arcpy.AddMessage(" attachments added")
+        available_tables = arcpy.ListFeatureClasses() + arcpy.ListTables()
+        for table, idField in TABLES_WITH_ATTACHMENTS.items():
+            #Check to see if table is in the geodatabase, not all CAMEO ZIPs will have ALL of the possible TABLE_WITH_ATTACHMENTS
+            if table in available_tables:
+                arcpy.AddMessage("Adding attachments to {}...".format(table))
+                if os.path.exists(attachment_full_path):
+                    add_attachment(attachment_full_path, table, idField)
+                else:
+                    arcpy.AddWarning("Expected attachment path does not exist: " + attachment_full_path)
+                arcpy.AddMessage(" attachments added")
     except Exception:
         arcpy.AddError("Error occurred while adding attachments")  
         raise    
@@ -194,23 +251,23 @@ def remove_attachment_folder(extracted_file_location, out_gdb_path):
 
     if os.path.exists(attachment_full_path):
         shutil.rmtree(attachment_full_path)
-        arcpy.AddMessage("Removed attachment folder: " + attachment_full_path)
+        arcpy.AddMessage("Removed attachment folder: {}\n".format(attachment_full_path))
 
-def add_attachment(search_folder):
+def add_attachment(search_folder, inTable, att_id_field):
     """Enable and add the attachments """
     #fields added to support the attachment table generated
     id_field_name = "fieldID"
     value_field_name = "fieldValue"
 
     #first enable attachments
-    arcpy.EnableAttachments_management(arcpy.env.workspace + os.sep + NAME_OF_SPATIAL_TABLE)
+    arcpy.EnableAttachments_management(arcpy.env.workspace + os.sep + inTable)
 
     #create attachemnt table (<FieldValueToJoinOn>, <pathToResource>)
     attachment_table = create_attachment_table(search_folder, id_field_name, value_field_name)
 
     #TODO could look at using the working directory arg here to support longer paths to the attachments
-    arcpy.AddAttachments_management(arcpy.env.workspace + os.sep + NAME_OF_SPATIAL_TABLE, 
-                                    ATTACHMENT_ID_FIELD, 
+    arcpy.AddAttachments_management(arcpy.env.workspace + os.sep + inTable, 
+                                    att_id_field, 
                                     attachment_table, 
                                     id_field_name, 
                                     value_field_name)
@@ -281,7 +338,7 @@ def get_fields(reader):
         if first_row:
             first_row = False
             for field_name in row:               
-                fields[index] = [field_name, 255, "Text", False] #default to "Text"
+                fields[index] = [field_name, 1000, "Text", False] #default to "Text"
                 index += 1
         else:
             error_row = True if len(row) != len(fields) else False
@@ -291,11 +348,11 @@ def get_fields(reader):
                 current_length = len(value)
                 if fields[index][1] < current_length: 
                     if current_length in range(0, 249): 
-                        fields[index][1] = 250
+                        fields[index][1] = 1500
                     elif current_length in range(250, 499):
-                        fields[index][1] = 500
+                        fields[index][1] = 3000
                     elif current_length in range(500, 999):
-                        fields[index][1] = 1000
+                        fields[index][1] = 5000
                     else:
                         #if the value exceeds 1000 then round it UP to the nearest thousand
                         # and use that for the length
@@ -317,6 +374,8 @@ def tables_to_gdb(folder_path, out_gdb_path):
         #find all *.mer files
         new_file_ext = ".csv"
         old_file_ext = ".mer"
+        latField = None
+        lonField = None
         files = glob.glob(folder_path + os.sep + "*" + old_file_ext)
 
         for file in files:
@@ -330,16 +389,19 @@ def tables_to_gdb(folder_path, out_gdb_path):
             shutil.move(current_file, new_file)
 
             is_spatial = False
-            if new_file_name.replace(new_file_ext, '') == NAME_OF_SPATIAL_TABLE: 
+            baseName = new_file_name.replace(new_file_ext, '')
+            if baseName in NAMES_OF_SPATIAL_TABLES: 
                 is_spatial = True
-            t = create_and_populate_table(new_file, out_gdb_path, is_spatial)
+                latField = NAMES_OF_SPATIAL_TABLES[baseName]['LatField']
+                lonField = NAMES_OF_SPATIAL_TABLES[baseName]['LonField']
+            t = create_and_populate_table(new_file, out_gdb_path, is_spatial, latField, lonField)
             #cleanup old file
             os.remove(new_file)
     except Exception:
         arcpy.AddError("Error occurred while loading the data")
         raise
 
-def create_and_populate_table(table, out_gdb, is_spatial):
+def create_and_populate_table(table, out_gdb, is_spatial, lat_field=None, lon_field=None):
     """Create the output table and populate its values"""
     with open(table, 'rt') as csv_file:
         reader = csv.reader(csv_file, delimiter=',', quotechar='"')       
@@ -348,19 +410,24 @@ def create_and_populate_table(table, out_gdb, is_spatial):
 
     table_name = os.path.basename(table).replace(".csv", "")
     table_name = arcpy.ValidateTableName(table_name, out_gdb)
-    arcpy.AddMessage("Adding Table: " + str(table_name))
+    outTable = out_gdb + os.sep + table_name
+    if arcpy.Exists(outTable):
+        arcpy.AddMessage("Appending Additional Records to Table: " + str(table_name))
+    else:
+        arcpy.AddMessage( "Adding Table: " + str(table_name))
 
     if is_spatial:
-        new_table = arcpy.CreateFeatureclass_management(out_gdb, 
+        new_table = arcpy.CreateFeatureclass_management("in_memory", 
                                                 table_name, 
                                                 "Point", 
                                                 spatial_reference = SPATIAL_REFERENCE)
     else:
-        new_table = arcpy.CreateTable_management(out_gdb, table_name)      
-    arcpy.AddMessage("  Table Added: " + str(new_table))
+        new_table = arcpy.CreateTable_management("in_memory", table_name)      
+    arcpy.AddMessage("  Table Added: " + out_gdb + os.sep + table_name)
     arcpy.AddMessage("  Adding new fields...")
     index = 0
     null_fields = []
+    #fieldsDescriptions = []
     for field in fields:
         f = fields[index]
         field_name = str(f[0])
@@ -371,6 +438,7 @@ def create_and_populate_table(table, out_gdb, is_spatial):
                                         field_name,
                                         field_type = f[2],
                                         field_length= int(f[1]))
+            #fieldsDescriptions.append([field_name, f[2], f[0], int(f[1])])
         else:
             arcpy.AddWarning("{0}: contains a field with a missing name at index {1}".format(table_name, str(index)))
             arcpy.AddWarning("No new field was added for index " + str(index))
@@ -381,9 +449,32 @@ def create_and_populate_table(table, out_gdb, is_spatial):
     remove_null(fields, null_fields)
 
     if is_spatial:
-        add_data(table, new_table, LAT_FIELD_NAME, LON_FIELD_NAME, fields, null_fields)
+        add_data(table, new_table, lat_field, lon_field, fields, null_fields)
     else:
         add_data(table, new_table, None, None, fields, null_fields)
+
+    #Check to see if table already already exists in output geodatabase
+    #if table exists then append features from input ZIP file
+    #This is to support processing multiple input ZIP files
+    
+    outTable = out_gdb + os.sep + table_name
+    if arcpy.Exists(outTable):
+        existingTableFields = sorted([field.name for field in arcpy.ListFields(outTable)])
+        newTableFields = sorted([field.name for field in arcpy.ListFields(new_table)])
+        #Check to see if any additional fields need to be added to the source table
+        if existingTableFields != newTableFields:
+            fieldListToAdd = [fieldname for fieldname in newTableFields if fieldname not in existingTableFields]
+            fieldsToAdd = [field for field in arcpy.ListFields(new_table) if field.name in fieldListToAdd and field.type != "OID"]
+            for field in fieldsToAdd:
+                arcpy.AddField_management(outTable,field.name,field.type, field_length=field.length)
+        arcpy.Append_management(new_table,outTable,schema_type="NO_TEST")
+    else:
+        if is_spatial:
+            arcpy.CopyFeatures_management(new_table, outTable)
+        else:
+            arcpy.CopyRows_management(new_table, outTable)
+    
+    arcpy.Delete_management("in_memory")
 
 def add_data(table, new_table, field_lat=None, field_lon=None, fields=None, null_fields=None):
     """Reads data from csv and writes to the new gdb table""" 
@@ -473,7 +564,7 @@ def main():
 
     ##Path to *.zip
     ##Example Usage: r"C:\DATA_all_July2014.zip"
-    zip_path = arcpy.GetParameterAsText(0)
+    zip_paths = [valueObject.value for valueObject in arcpy.GetParameter(0)]
 
     ###Path to output workspace...could derive this from the zip
     ##Example Usage: r"C:\temp"
@@ -482,24 +573,42 @@ def main():
     ##Name of output gdb
     ##Example Usage: "testDataOutput"
     gdb_name = arcpy.GetParameterAsText(2)
-
-    #extract the zip file
-    extracted_file_location = extract_zip(zip_path) 
   
     #create the output workspace
     out_gdb_path = create_output_gdb(out_workspace_path, gdb_name)
 
     #import the data into gdb tables
-    tables_to_gdb(extracted_file_location, out_gdb_path)
+    for zip_path in zip_paths:
+        #extract the zip file
+        extracted_file_location = extract_zip(zip_path)
+        #convert to .mer files to GDB tables
+        tables_to_gdb(extracted_file_location, out_gdb_path)
+        if product_info != 'ArcView':
+            #add the attachments
+            add_attachments(extracted_file_location, out_gdb_path)
+            #remove attachmnet folder from directory after attachment to GDB
+            remove_attachment_folder(extracted_file_location, out_gdb_path)
 
     if product_info != 'ArcView':
         #create appropriate relationship classes
         create_relationship_classes(RELATIONSHIPS)
 
-        #add the attachments
-        add_attachments(extracted_file_location, out_gdb_path)
+    #Set Derived Parameter Values
+    # derived values are added to the map
 
-    remove_attachment_folder(extracted_file_location, out_gdb_path)
+    arcpy.env.workspace = out_gdb_path
+
+    out_tables = arcpy.ListTables()
+
+    out_tables = ";".join([out_gdb_path + os.sep + table for table in out_tables if "__ATTACH" not in table])
+
+    out_FCs = arcpy.ListFeatureClasses()
+
+    out_FCs = ";".join(sorted([out_gdb_path + os.sep + fc for fc in out_FCs if "__ATTACH" not in fc], reverse=True))
+
+    arcpy.SetParameterAsText(3, out_FCs)
+
+    arcpy.SetParameterAsText(4, out_tables)
 
 if __name__ == "__main__":
     main()
