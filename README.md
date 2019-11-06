@@ -1,7 +1,7 @@
 cameo-import-tool
 ==================
 
-The CAMEO Import tool imports exported data from a CAMEO system into File Geodatabase.
+The Import CAMEO Data tool imports exported data from a CAMEO system into File Geodatabase.
 
 #Features
 
@@ -16,9 +16,11 @@ Start using this this tool now by downloading this repository as a .zip file and
 
 * For editing and customizing the scripts - Notepad or a Python Editor
 * Basic understanding of GeoProcessing with ArcGIS
-* ArcGIS Desktop 10.2, 10.3
+* ArcGIS Pro 2.4+
  
 ## Resources
+
+Learn more about about the [CAMEO Data Management Solution](https://solutions.arcgis.com/emergency-management/help/cameo-data-management/)
 
 Learn more about Esri's [Emergency Management Solutions](http://solutions.arcgis.com/local-government/"ArcGIS for Local Government maps and apps)
 
@@ -26,13 +28,9 @@ Show me a list of other [State Government GitHub repositories](http://esri.githu
 
 Show me a list of other [Emergency Management GitHub repositories](http://esri.github.io/#Emergency-Management).
 
-Additional [information and sample data](?need link?)
-are available for the application.
-
 ## Issues
 
 Find a bug or want to request a new feature?  Please let us know by submitting an issue.
-
 
 ## Contributing
 
