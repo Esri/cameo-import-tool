@@ -1,6 +1,8 @@
 import os
 import arcpy
 import collections
+import solutions_test_logger as stl
+from datetime import datetime as dt
 
 testDir = os.path.dirname(os.path.abspath(__file__))
 
@@ -1632,7 +1634,7 @@ def functional_tests(testSuite):
             errorCount += 1
     
     return errorCount
-
+start_time = dt.now()
 arcpy.ImportToolbox(toolBoxPath)
 
 suiteList = [mockCAMEO_suite,sampleCAMEO_suite,combinedCAMEO_suite]
@@ -1645,6 +1647,12 @@ for suite in suiteList:
     errCount = functional_tests(suite)
     totalErrors += errCount
     arcpy.management.Delete(suite['GDBPath'])
+end_time = dt.now()
+delta = end_time - start_time 
+duration = delta.total_seconds()
 
 if totalErrors > 0:
+    stl.send_test_log("cameo_functional","Fail", duration)
     sys.exit(1)
+else:
+    stl.send_test_log("cameo_functional","Pass", duration)
